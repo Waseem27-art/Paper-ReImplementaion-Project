@@ -1,6 +1,8 @@
+import pandas as pd
+import numpy as np
 from dataclasses import dataclass
 from typing import Union
-
+from tabularbench.attacks.capgd.capgd import CAPGD
 from tabularbench.attacks.caa.caa import ConstrainedAutoAttack
 from tabularbench.attacks.objective_calculator import ObjectiveCalculator
 from tabularbench.benchmark.model_utils import load_model_and_weights
@@ -10,6 +12,7 @@ from tabularbench.metrics.compute import compute_metric
 from tabularbench.metrics.metric_factory import create_metric
 from tabularbench.models.tab_scaler import TabScaler
 from tabularbench.utils.datatypes import to_torch_number
+import torch
 
 
 @dataclass
@@ -24,6 +27,8 @@ class BenchmarkSettings:
     eps: float = 0.5
     filter_class: int = 1
     filter_correct: bool = False
+    adaptive_step: bool = True  # Add a setting for CAPGD-specific parameters
+    momentum: float = 0.9
 
 
 def benchmark(
@@ -34,7 +39,7 @@ def benchmark(
     settings: BenchmarkSettings = None,
 ) -> Union[float, float, float]:
 
-    # Alliases
+    # Aliases
     bms = settings
 
     if bms is None:
@@ -71,22 +76,23 @@ def benchmark(
 
     # Attack
     attacks_settings = {
-        "constraints_eval": constraints_o,
-        "n_jobs": bms.n_jobs,
-        "steps": bms.steps,
-        "n_gen": bms.n_gen,
-        "n_offsprings": bms.n_offspring,
-        "eps": bms.eps,
-        "norm": distance,
-        "seed": bms.seed,
-        "constraints": constraints_o,
+        "constraints": constraints_o,  # Ensure this key is properly set
         "scaler": scaler,
         "model": model_eval.wrapper_model,
-        "fix_equality_constraints_end": True,
         "model_objective": model_eval.predict_proba,
+        "norm": distance,  # 'L2' or 'Linf'
+        "eps": bms.eps,
+        "steps": bms.steps,
+        "n_restarts": 1,  # Update as required
+        "seed": bms.seed,
+        "loss": "ce",  # Default loss
+        "fix_equality_constraints_end": True,
+        "fix_equality_constraints_iter": True,
+        "adaptive_eps": bms.adaptive_step,  # If adaptive_step is being used
+        "verbose": False,  # Or True for debugging
     }
 
-    attack = ConstrainedAutoAttack(**attacks_settings)
+    attack = CAPGD(**attacks_settings)
 
     x_att, y_att = get_x_attack(
         x_test,
@@ -97,9 +103,15 @@ def benchmark(
         bms.filter_correct,
         bms.n_input,
     )
+    x_att = torch.tensor(x_att, dtype=torch.float32).to(bms.device)
+    y_att = torch.tensor(y_att, dtype=torch.long).to(bms.device)
     print(f"Attacking {len(x_att)} samples.")
 
     x_adv = attack(x_att, y_att)
+
+    # Detach the tensor from the computation graph and convert to NumPy
+    x_adv = x_adv.detach().cpu().numpy()  # Detach and move to CPU if necessary
+    x_adv = np.expand_dims(x_adv, 1)
 
     # Evaluate
     objective_calculator = ObjectiveCalculator(
