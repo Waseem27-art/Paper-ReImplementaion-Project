@@ -1,3 +1,30 @@
+# **The major changes implemented in the forked code:**
+
+<br />
+<br />
+
+
+**modified** /tabularbench/benchmark/benchmark.py to run the CAPGD attack instead of CAA
+
+**modified** the tasks/run_benchmark.py each time to test on different datasets and models
+
+**implemented Lowprofool attack on URL dataset** (u may face some small isssues in the final attack)
+
+note: initially we tried to clone the repo and implement our own attack.py with our own parameters and constraints .Due too much fluctuations from the code; we had to switch back to basic one. we used Docker cli using podman.
+
+Due to merging of the task paper with Tabularmenching other attacks and models, we improvised the paper and **attacked on both original model**(for eg:stg_url_default.model) and **adversary one**(stg_url_madry.model)
+
+for viewers: the paper:- CAPGD attack: Towards Adaptive Attacks on Constrained Tabular Machine Learning
+
+
+<br />
+
+<br />
+
+**REST OF THE README OF ORIGINAL REPO:**
+
+
+
 # TabularBench
 
 TabularBench: Adversarial robustness benchmark for tabular data
